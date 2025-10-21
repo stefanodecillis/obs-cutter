@@ -1,0 +1,30 @@
+[package]
+name = "obs-cutter"
+version = "1.0.0"
+edition = "2021"
+authors = ["Stefano De Cillis <stefanodecillis@users.noreply.github.com>"]
+description = "CLI tool to split 32:9 OBS recordings into two separate 16:9 videos"
+license = "MIT"
+repository = "https://github.com/stefanodecillis/obs-cutter"
+homepage = "https://github.com/stefanodecillis/obs-cutter"
+keywords = ["video", "ffmpeg", "obs", "cli", "split"]
+categories = ["command-line-utilities", "multimedia::video"]
+readme = "README.md"
+
+[[bin]]
+name = "obs-cutter"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+colored = "2.1"
+indicatif = "0.17"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

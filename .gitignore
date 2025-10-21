@@ -1,0 +1,40 @@
+# Rust build artifacts
+target/
+
+# macOS
+.DS_Store
+
+# Video files (test files)
+*.mov
+*.mp4
+*.avi
+*.mkv
+*.webm
+*.flv
+*.wmv
+*.m4v
+*.jpg
+*.jpeg
+*.png
+
+# Output directories
+output/
+split-videos/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+
+# Temporary files
+*.tmp
+*~
+
+# Test/debug files
+debug-*.sh
+test-*
