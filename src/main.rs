@@ -1,11 +1,11 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use clap::Parser;
 use colored::*;
 use indicatif::{ProgressBar, ProgressStyle};
 use serde::Deserialize;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::fs;
 
 #[derive(Parser)]
 #[command(name = "obs-cutter")]
@@ -61,10 +61,14 @@ fn check_ffmpeg() -> Result<()> {
 fn get_video_info(video_path: &Path) -> Result<(u32, u32, String)> {
     let output = Command::new("ffprobe")
         .args([
-            "-v", "error",
-            "-select_streams", "v:0",
-            "-show_entries", "stream=width,height,codec_name,codec_type",
-            "-of", "json",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=width,height,codec_name,codec_type",
+            "-of",
+            "json",
         ])
         .arg(video_path)
         .output()
@@ -74,12 +78,15 @@ fn get_video_info(video_path: &Path) -> Result<(u32, u32, String)> {
         bail!("Failed to get video information");
     }
 
-    let probe_output: ProbeOutput = serde_json::from_slice(&output.stdout)
-        .context("Failed to parse ffprobe output")?;
+    let probe_output: ProbeOutput =
+        serde_json::from_slice(&output.stdout).context("Failed to parse ffprobe output")?;
 
-    let stream = probe_output.streams
+    let stream = probe_output
+        .streams
         .iter()
-        .find(|s| s.codec_type.as_deref() == Some("video") && s.width.is_some() && s.height.is_some())
+        .find(|s| {
+            s.codec_type.as_deref() == Some("video") && s.width.is_some() && s.height.is_some()
+        })
         .context("No video stream found")?;
 
     let width = stream.width.context("Video stream missing width")?;
@@ -91,9 +98,15 @@ fn get_video_info(video_path: &Path) -> Result<(u32, u32, String)> {
 
 fn get_codec_args(quality: &str) -> Vec<&str> {
     match quality {
-        "high" => vec!["-c:v", "libx264", "-crf", "18", "-preset", "slow", "-c:a", "copy"],
-        "medium" => vec!["-c:v", "libx264", "-crf", "23", "-preset", "medium", "-c:a", "copy"],
-        _ => vec!["-c:v", "libx264", "-crf", "0", "-preset", "veryslow", "-c:a", "copy"], // lossless
+        "high" => vec![
+            "-c:v", "libx264", "-crf", "18", "-preset", "slow", "-c:a", "copy",
+        ],
+        "medium" => vec![
+            "-c:v", "libx264", "-crf", "23", "-preset", "medium", "-c:a", "copy",
+        ],
+        _ => vec![
+            "-c:v", "libx264", "-crf", "0", "-preset", "veryslow", "-c:a", "copy",
+        ], // lossless
     }
 }
 
@@ -144,20 +157,27 @@ fn main() -> Result<()> {
     println!("{}\n", "===========================".cyan());
 
     // Check if FFmpeg is installed
-    if let Err(_) = check_ffmpeg() {
+    if check_ffmpeg().is_err() {
         eprintln!("{}", "Error: FFmpeg is not installed!".red());
         println!("\n{}", "To install FFmpeg on macOS:".yellow());
         println!("  {}", "brew install ffmpeg".white());
         println!("\n{}", "On Ubuntu/Debian:".yellow());
         println!("  {}", "sudo apt-get install ffmpeg".white());
         println!("\n{}", "On Windows:".yellow());
-        println!("  {}", "Download from https://ffmpeg.org/download.html".white());
+        println!(
+            "  {}",
+            "Download from https://ffmpeg.org/download.html".white()
+        );
         std::process::exit(1);
     }
 
     // Check if video file exists
     if !cli.video.exists() {
-        eprintln!("{} {}", "Error: Video file not found:".red(), cli.video.display());
+        eprintln!(
+            "{} {}",
+            "Error: Video file not found:".red(),
+            cli.video.display()
+        );
         std::process::exit(1);
     }
 
@@ -166,13 +186,13 @@ fn main() -> Result<()> {
     spinner.set_style(
         ProgressStyle::default_spinner()
             .template("{spinner:.green} {msg}")
-            .unwrap()
+            .unwrap(),
     );
     spinner.set_message("Analyzing video...");
     spinner.enable_steady_tick(std::time::Duration::from_millis(100));
 
-    let (width, height, _codec_name) = get_video_info(&cli.video)
-        .context("Failed to analyze video")?;
+    let (width, height, _codec_name) =
+        get_video_info(&cli.video).context("Failed to analyze video")?;
 
     spinner.finish_with_message(format!(
         "{} Video analyzed: {}x{}",
@@ -189,15 +209,22 @@ fn main() -> Result<()> {
             width,
             height
         );
-        println!("{} Expected: 3840x1080 (32:9 aspect ratio)", "Warning:".yellow());
-        println!("{} The output might not be as expected.\n", "Warning:".yellow());
+        println!(
+            "{} Expected: 3840x1080 (32:9 aspect ratio)",
+            "Warning:".yellow()
+        );
+        println!(
+            "{} The output might not be as expected.\n",
+            "Warning:".yellow()
+        );
     }
 
     // Prepare output paths
     let input_dir = cli.video.parent().unwrap_or(Path::new("."));
     let input_name = cli.video.file_stem().unwrap().to_str().unwrap();
-    let input_ext = cli.format.as_ref()
-        .map(|s| s.as_str())
+    let input_ext = cli
+        .format
+        .as_deref()
         .unwrap_or_else(|| cli.video.extension().unwrap().to_str().unwrap());
 
     let default_output_dir = input_dir.to_path_buf();
@@ -205,8 +232,7 @@ fn main() -> Result<()> {
 
     // Create output directory if it doesn't exist
     if !output_dir.exists() {
-        fs::create_dir_all(output_dir)
-            .context("Failed to create output directory")?;
+        fs::create_dir_all(output_dir).context("Failed to create output directory")?;
     }
 
     let output_left = output_dir.join(format!("{}-left.{}", input_name, input_ext));
@@ -224,7 +250,7 @@ fn main() -> Result<()> {
     spinner.set_style(
         ProgressStyle::default_spinner()
             .template("{spinner:.green} {msg}")
-            .unwrap()
+            .unwrap(),
     );
     spinner.set_message("Extracting left video...");
     spinner.enable_steady_tick(std::time::Duration::from_millis(100));
@@ -242,7 +268,7 @@ fn main() -> Result<()> {
     spinner.set_style(
         ProgressStyle::default_spinner()
             .template("{spinner:.green} {msg}")
-            .unwrap()
+            .unwrap(),
     );
     spinner.set_message("Extracting right video...");
     spinner.enable_steady_tick(std::time::Duration::from_millis(100));
