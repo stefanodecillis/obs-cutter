@@ -9,7 +9,7 @@ use std::process::{Command, Stdio};
 
 #[derive(Parser)]
 #[command(name = "obs-cutter")]
-#[command(version = "1.0.0")]
+#[command(version = "1.0.1")]
 #[command(about = "Split 32:9 OBS recordings into two separate 16:9 videos", long_about = None)]
 struct Cli {
     /// Path to the video file to split
