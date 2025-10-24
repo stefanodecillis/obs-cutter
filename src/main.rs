@@ -27,6 +27,10 @@ struct Cli {
     /// Output directory (defaults to input directory)
     #[arg(short, long, value_name = "DIR")]
     output: Option<PathBuf>,
+
+    /// Disable hardware acceleration (force software encoding)
+    #[arg(long)]
+    no_hw_accel: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -45,6 +49,37 @@ struct ProbeOutput {
     streams: Vec<StreamInfo>,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+enum HardwareEncoder {
+    VideoToolbox,  // macOS (Apple Silicon & Intel)
+    Nvenc,         // NVIDIA GPUs
+    QuickSync,     // Intel Quick Sync
+    Amf,           // AMD GPUs
+    None,          // Software fallback
+}
+
+impl HardwareEncoder {
+    fn h264_encoder(&self) -> &str {
+        match self {
+            HardwareEncoder::VideoToolbox => "h264_videotoolbox",
+            HardwareEncoder::Nvenc => "h264_nvenc",
+            HardwareEncoder::QuickSync => "h264_qsv",
+            HardwareEncoder::Amf => "h264_amf",
+            HardwareEncoder::None => "libx264",
+        }
+    }
+
+    fn name(&self) -> &str {
+        match self {
+            HardwareEncoder::VideoToolbox => "VideoToolbox (Apple)",
+            HardwareEncoder::Nvenc => "NVENC (NVIDIA)",
+            HardwareEncoder::QuickSync => "Quick Sync (Intel)",
+            HardwareEncoder::Amf => "AMF (AMD)",
+            HardwareEncoder::None => "Software (libx264)",
+        }
+    }
+}
+
 fn check_ffmpeg() -> Result<()> {
     let output = Command::new("which")
         .arg("ffmpeg")
@@ -56,6 +91,47 @@ fn check_ffmpeg() -> Result<()> {
         Ok(status) if status.success() => Ok(()),
         _ => bail!("FFmpeg is not installed"),
     }
+}
+
+fn check_encoder_available(encoder_name: &str) -> bool {
+    let output = Command::new("ffmpeg")
+        .args(["-hide_banner", "-encoders"])
+        .output();
+
+    if let Ok(output) = output {
+        if output.status.success() {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            return stdout.contains(encoder_name);
+        }
+    }
+    false
+}
+
+fn detect_hardware_encoder() -> HardwareEncoder {
+    // Check platform-specific encoders in order of preference
+
+    // macOS: VideoToolbox (works on both Apple Silicon and Intel)
+    if cfg!(target_os = "macos") && check_encoder_available("h264_videotoolbox") {
+        return HardwareEncoder::VideoToolbox;
+    }
+
+    // NVIDIA: Check for NVENC
+    if check_encoder_available("h264_nvenc") {
+        return HardwareEncoder::Nvenc;
+    }
+
+    // Intel: Check for Quick Sync
+    if check_encoder_available("h264_qsv") {
+        return HardwareEncoder::QuickSync;
+    }
+
+    // AMD: Check for AMF
+    if check_encoder_available("h264_amf") {
+        return HardwareEncoder::Amf;
+    }
+
+    // Fallback to software encoding
+    HardwareEncoder::None
 }
 
 fn get_video_info(video_path: &Path) -> Result<(u32, u32, String)> {
@@ -96,17 +172,124 @@ fn get_video_info(video_path: &Path) -> Result<(u32, u32, String)> {
     Ok((width, height, codec_name))
 }
 
-fn get_codec_args(quality: &str) -> Vec<&str> {
-    match quality {
-        "high" => vec![
-            "-c:v", "libx264", "-crf", "18", "-preset", "slow", "-c:a", "copy",
-        ],
-        "medium" => vec![
-            "-c:v", "libx264", "-crf", "23", "-preset", "medium", "-c:a", "copy",
-        ],
-        _ => vec![
-            "-c:v", "libx264", "-crf", "0", "-preset", "veryslow", "-c:a", "copy",
-        ], // lossless
+fn get_codec_args(quality: &str, encoder: &HardwareEncoder) -> Vec<String> {
+    let encoder_name = encoder.h264_encoder();
+
+    match encoder {
+        HardwareEncoder::VideoToolbox => {
+            // VideoToolbox uses bitrate-based encoding
+            let bitrate = match quality {
+                "high" => "15M",
+                "medium" => "10M",
+                _ => "25M", // lossless/highest quality
+            };
+            vec![
+                "-c:v".to_string(),
+                encoder_name.to_string(),
+                "-b:v".to_string(),
+                bitrate.to_string(),
+                "-allow_sw".to_string(),
+                "1".to_string(),
+                "-c:a".to_string(),
+                "copy".to_string(),
+            ]
+        }
+        HardwareEncoder::Nvenc => {
+            // NVENC supports CRF-like quality with -cq parameter
+            let cq = match quality {
+                "high" => "18",
+                "medium" => "23",
+                _ => "15", // lossless/highest quality
+            };
+            let preset = match quality {
+                "high" => "p7",     // Slowest, highest quality
+                "medium" => "p4",   // Medium
+                _ => "p7",          // Maximum quality for lossless
+            };
+            vec![
+                "-c:v".to_string(),
+                encoder_name.to_string(),
+                "-preset".to_string(),
+                preset.to_string(),
+                "-cq".to_string(),
+                cq.to_string(),
+                "-c:a".to_string(),
+                "copy".to_string(),
+            ]
+        }
+        HardwareEncoder::QuickSync => {
+            // Quick Sync uses global_quality parameter
+            let quality_param = match quality {
+                "high" => "18",
+                "medium" => "23",
+                _ => "15", // Best quality
+            };
+            vec![
+                "-c:v".to_string(),
+                encoder_name.to_string(),
+                "-global_quality".to_string(),
+                quality_param.to_string(),
+                "-look_ahead".to_string(),
+                "1".to_string(),
+                "-c:a".to_string(),
+                "copy".to_string(),
+            ]
+        }
+        HardwareEncoder::Amf => {
+            // AMF uses quality parameter
+            let quality_param = match quality {
+                "high" => "18",
+                "medium" => "23",
+                _ => "15", // Best quality
+            };
+            vec![
+                "-c:v".to_string(),
+                encoder_name.to_string(),
+                "-rc".to_string(),
+                "cqp".to_string(),
+                "-qp_i".to_string(),
+                quality_param.to_string(),
+                "-qp_p".to_string(),
+                quality_param.to_string(),
+                "-c:a".to_string(),
+                "copy".to_string(),
+            ]
+        }
+        HardwareEncoder::None => {
+            // Software encoding (libx264)
+            match quality {
+                "high" => vec![
+                    "-c:v".to_string(),
+                    "libx264".to_string(),
+                    "-crf".to_string(),
+                    "18".to_string(),
+                    "-preset".to_string(),
+                    "slow".to_string(),
+                    "-c:a".to_string(),
+                    "copy".to_string(),
+                ],
+                "medium" => vec![
+                    "-c:v".to_string(),
+                    "libx264".to_string(),
+                    "-crf".to_string(),
+                    "23".to_string(),
+                    "-preset".to_string(),
+                    "medium".to_string(),
+                    "-c:a".to_string(),
+                    "copy".to_string(),
+                ],
+                _ => vec![
+                    "-c:v".to_string(),
+                    "libx264".to_string(),
+                    "-crf".to_string(),
+                    "0".to_string(),
+                    "-preset".to_string(),
+                    "veryslow".to_string(),
+                    "-c:a".to_string(),
+                    "copy".to_string(),
+                ], // lossless
+            }
+        }
     }
 }
 
@@ -115,6 +298,7 @@ fn process_video(
     output: &Path,
     side: &str,
     quality: &str,
+    encoder: &HardwareEncoder,
     _spinner: &ProgressBar,
 ) -> Result<()> {
     let crop_filter = match side {
@@ -123,11 +307,17 @@ fn process_video(
         _ => bail!("Invalid side: {}", side),
     };
 
-    let codec_args = get_codec_args(quality);
+    let codec_args = get_codec_args(quality, encoder);
 
-    let mut args = vec!["-i", input.to_str().unwrap(), "-vf", crop_filter];
-    args.extend_from_slice(&codec_args);
-    args.extend_from_slice(&["-y", output.to_str().unwrap()]);
+    let mut args: Vec<String> = vec![
+        "-i".to_string(),
+        input.to_str().unwrap().to_string(),
+        "-vf".to_string(),
+        crop_filter.to_string(),
+    ];
+    args.extend(codec_args);
+    args.push("-y".to_string());
+    args.push(output.to_str().unwrap().to_string());
 
     let output = Command::new("ffmpeg")
         .args(&args)
@@ -170,6 +360,27 @@ fn main() -> Result<()> {
         );
         std::process::exit(1);
     }
+
+    // Detect hardware encoder
+    let encoder = if cli.no_hw_accel {
+        println!("{} Hardware acceleration disabled by user\n", "ℹ".blue());
+        HardwareEncoder::None
+    } else {
+        let detected = detect_hardware_encoder();
+        if detected == HardwareEncoder::None {
+            println!(
+                "{} No hardware encoder detected, using software encoding\n",
+                "ℹ".blue()
+            );
+        } else {
+            println!(
+                "{} Using hardware encoder: {}\n",
+                "✓".green(),
+                detected.name()
+            );
+        }
+        detected
+    };
 
     // Check if video file exists
     if !cli.video.exists() {
@@ -255,7 +466,7 @@ fn main() -> Result<()> {
     spinner.set_message("Extracting left video...");
     spinner.enable_steady_tick(std::time::Duration::from_millis(100));
 
-    process_video(&cli.video, &output_left, "left", &cli.quality, &spinner)?;
+    process_video(&cli.video, &output_left, "left", &cli.quality, &encoder, &spinner)?;
 
     spinner.finish_with_message(format!(
         "{} Left video saved: {}",
@@ -273,7 +484,7 @@ fn main() -> Result<()> {
     spinner.set_message("Extracting right video...");
     spinner.enable_steady_tick(std::time::Duration::from_millis(100));
 
-    process_video(&cli.video, &output_right, "right", &cli.quality, &spinner)?;
+    process_video(&cli.video, &output_right, "right", &cli.quality, &encoder, &spinner)?;
 
     spinner.finish_with_message(format!(
         "{} Right video saved: {}",
