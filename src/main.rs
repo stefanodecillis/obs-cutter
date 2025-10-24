@@ -6,7 +6,6 @@ use serde::Deserialize;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::env;
 
 #[derive(Parser)]
 #[command(name = "obs-cutter")]
