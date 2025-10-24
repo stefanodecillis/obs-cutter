@@ -51,11 +51,11 @@ struct ProbeOutput {
 
 #[derive(Debug, Clone, PartialEq)]
 enum HardwareEncoder {
-    VideoToolbox,  // macOS (Apple Silicon & Intel)
-    Nvenc,         // NVIDIA GPUs
-    QuickSync,     // Intel Quick Sync
-    Amf,           // AMD GPUs
-    None,          // Software fallback
+    VideoToolbox, // macOS (Apple Silicon & Intel)
+    Nvenc,        // NVIDIA GPUs
+    QuickSync,    // Intel Quick Sync
+    Amf,          // AMD GPUs
+    None,         // Software fallback
 }
 
 impl HardwareEncoder {
@@ -202,9 +202,9 @@ fn get_codec_args(quality: &str, encoder: &HardwareEncoder) -> Vec<String> {
                 _ => "15", // lossless/highest quality
             };
             let preset = match quality {
-                "high" => "p7",     // Slowest, highest quality
-                "medium" => "p4",   // Medium
-                _ => "p7",          // Maximum quality for lossless
+                "high" => "p7",   // Slowest, highest quality
+                "medium" => "p4", // Medium
+                _ => "p7",        // Maximum quality for lossless
             };
             vec![
                 "-c:v".to_string(),
@@ -466,7 +466,14 @@ fn main() -> Result<()> {
     spinner.set_message("Extracting left video...");
     spinner.enable_steady_tick(std::time::Duration::from_millis(100));
 
-    process_video(&cli.video, &output_left, "left", &cli.quality, &encoder, &spinner)?;
+    process_video(
+        &cli.video,
+        &output_left,
+        "left",
+        &cli.quality,
+        &encoder,
+        &spinner,
+    )?;
 
     spinner.finish_with_message(format!(
         "{} Left video saved: {}",
@@ -484,7 +491,14 @@ fn main() -> Result<()> {
     spinner.set_message("Extracting right video...");
     spinner.enable_steady_tick(std::time::Duration::from_millis(100));
 
-    process_video(&cli.video, &output_right, "right", &cli.quality, &encoder, &spinner)?;
+    process_video(
+        &cli.video,
+        &output_right,
+        "right",
+        &cli.quality,
+        &encoder,
+        &spinner,
+    )?;
 
     spinner.finish_with_message(format!(
         "{} Right video saved: {}",

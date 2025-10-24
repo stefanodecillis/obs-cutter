@@ -1,6 +1,6 @@
 [package]
 name = "obs-cutter"
-version = "1.0.1"
+version = "1.0.2"
 edition = "2021"
 authors = ["Stefano De Cillis <stefanodecillis@users.noreply.github.com>"]
 description = "CLI tool to split 32:9 OBS recordings into two separate 16:9 videos"
