@@ -8,9 +8,6 @@ set -e
 PLATFORM="${1:-}"
 OUTPUT_DIR="${2:-./ffmpeg-bin}"
 
-# FFmpeg version to download
-FFMPEG_VERSION="7.0"
-
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -50,44 +47,27 @@ fi
 mkdir -p "$OUTPUT_DIR"
 
 case "$PLATFORM" in
-    macos-arm64|macos-x64)
-        # Use evermeet.cx builds for macOS (static builds)
-        log_info "Downloading FFmpeg for macOS..."
+    macos-arm64)
+        log_info "Downloading FFmpeg for macOS ARM64..."
 
-        FFMPEG_URL="https://evermeet.cx/ffmpeg/ffmpeg-${FFMPEG_VERSION}.zip"
-        FFPROBE_URL="https://evermeet.cx/ffmpeg/ffprobe-${FFMPEG_VERSION}.zip"
+        # Use ffmpeg-static builds from GitHub (osxcross builds)
+        FFMPEG_URL="https://github.com/eugeneware/ffmpeg-static/releases/download/b6.0/ffmpeg-darwin-arm64"
+        FFPROBE_URL="https://github.com/eugeneware/ffmpeg-static/releases/download/b6.0/ffprobe-darwin-arm64"
 
-        # Download and extract ffmpeg
-        curl -L "$FFMPEG_URL" -o "$OUTPUT_DIR/ffmpeg.zip" || {
-            log_warn "evermeet.cx download failed, trying alternative..."
-            # Alternative: use homebrew's formula info to get the bottle
-            FFMPEG_URL="https://github.com/eugeneware/ffmpeg-static/releases/download/b${FFMPEG_VERSION}/ffmpeg-darwin-arm64"
-            if [ "$PLATFORM" = "macos-x64" ]; then
-                FFMPEG_URL="https://github.com/eugeneware/ffmpeg-static/releases/download/b${FFMPEG_VERSION}/ffmpeg-darwin-x64"
-            fi
-            curl -L "$FFMPEG_URL" -o "$OUTPUT_DIR/ffmpeg"
-            chmod +x "$OUTPUT_DIR/ffmpeg"
-        }
+        curl -L "$FFMPEG_URL" -o "$OUTPUT_DIR/ffmpeg"
+        curl -L "$FFPROBE_URL" -o "$OUTPUT_DIR/ffprobe"
 
-        if [ -f "$OUTPUT_DIR/ffmpeg.zip" ]; then
-            unzip -o "$OUTPUT_DIR/ffmpeg.zip" -d "$OUTPUT_DIR"
-            rm "$OUTPUT_DIR/ffmpeg.zip"
-        fi
+        chmod +x "$OUTPUT_DIR/ffmpeg" "$OUTPUT_DIR/ffprobe"
+        ;;
 
-        # Download and extract ffprobe
-        curl -L "$FFPROBE_URL" -o "$OUTPUT_DIR/ffprobe.zip" 2>/dev/null || {
-            FFPROBE_URL="https://github.com/eugeneware/ffmpeg-static/releases/download/b${FFMPEG_VERSION}/ffprobe-darwin-arm64"
-            if [ "$PLATFORM" = "macos-x64" ]; then
-                FFPROBE_URL="https://github.com/eugeneware/ffmpeg-static/releases/download/b${FFMPEG_VERSION}/ffprobe-darwin-x64"
-            fi
-            curl -L "$FFPROBE_URL" -o "$OUTPUT_DIR/ffprobe"
-            chmod +x "$OUTPUT_DIR/ffprobe"
-        }
+    macos-x64)
+        log_info "Downloading FFmpeg for macOS x64..."
 
-        if [ -f "$OUTPUT_DIR/ffprobe.zip" ]; then
-            unzip -o "$OUTPUT_DIR/ffprobe.zip" -d "$OUTPUT_DIR"
-            rm "$OUTPUT_DIR/ffprobe.zip"
-        fi
+        FFMPEG_URL="https://github.com/eugeneware/ffmpeg-static/releases/download/b6.0/ffmpeg-darwin-x64"
+        FFPROBE_URL="https://github.com/eugeneware/ffmpeg-static/releases/download/b6.0/ffprobe-darwin-x64"
+
+        curl -L "$FFMPEG_URL" -o "$OUTPUT_DIR/ffmpeg"
+        curl -L "$FFPROBE_URL" -o "$OUTPUT_DIR/ffprobe"
 
         chmod +x "$OUTPUT_DIR/ffmpeg" "$OUTPUT_DIR/ffprobe"
         ;;
@@ -95,12 +75,19 @@ case "$PLATFORM" in
     linux-x64)
         log_info "Downloading FFmpeg for Linux x64..."
 
-        # Use John Van Sickle's static builds
-        FFMPEG_URL="https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz"
+        # Use BtbN's reliable GitHub releases
+        FFMPEG_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz"
 
         curl -L "$FFMPEG_URL" -o "$OUTPUT_DIR/ffmpeg.tar.xz"
         tar -xf "$OUTPUT_DIR/ffmpeg.tar.xz" -C "$OUTPUT_DIR" --strip-components=1
         rm "$OUTPUT_DIR/ffmpeg.tar.xz"
+
+        # Move binaries from bin folder and clean up
+        if [ -d "$OUTPUT_DIR/bin" ]; then
+            mv "$OUTPUT_DIR/bin/ffmpeg" "$OUTPUT_DIR/"
+            mv "$OUTPUT_DIR/bin/ffprobe" "$OUTPUT_DIR/"
+            rm -rf "$OUTPUT_DIR/bin" "$OUTPUT_DIR/doc" "$OUTPUT_DIR/lib" "$OUTPUT_DIR/include" 2>/dev/null || true
+        fi
 
         # Keep only ffmpeg and ffprobe
         find "$OUTPUT_DIR" -type f ! \( -name "ffmpeg" -o -name "ffprobe" \) -delete 2>/dev/null || true
@@ -112,11 +99,19 @@ case "$PLATFORM" in
     linux-arm64)
         log_info "Downloading FFmpeg for Linux ARM64..."
 
-        FFMPEG_URL="https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-arm64-static.tar.xz"
+        # Use BtbN's reliable GitHub releases
+        FFMPEG_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linuxarm64-gpl.tar.xz"
 
         curl -L "$FFMPEG_URL" -o "$OUTPUT_DIR/ffmpeg.tar.xz"
         tar -xf "$OUTPUT_DIR/ffmpeg.tar.xz" -C "$OUTPUT_DIR" --strip-components=1
         rm "$OUTPUT_DIR/ffmpeg.tar.xz"
+
+        # Move binaries from bin folder and clean up
+        if [ -d "$OUTPUT_DIR/bin" ]; then
+            mv "$OUTPUT_DIR/bin/ffmpeg" "$OUTPUT_DIR/"
+            mv "$OUTPUT_DIR/bin/ffprobe" "$OUTPUT_DIR/"
+            rm -rf "$OUTPUT_DIR/bin" "$OUTPUT_DIR/doc" "$OUTPUT_DIR/lib" "$OUTPUT_DIR/include" 2>/dev/null || true
+        fi
 
         # Keep only ffmpeg and ffprobe
         find "$OUTPUT_DIR" -type f ! \( -name "ffmpeg" -o -name "ffprobe" \) -delete 2>/dev/null || true
@@ -128,8 +123,8 @@ case "$PLATFORM" in
     windows-x64)
         log_info "Downloading FFmpeg for Windows x64..."
 
-        # Use gyan.dev builds (BtbN builds are also an option)
-        FFMPEG_URL="https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+        # Use BtbN's reliable GitHub releases
+        FFMPEG_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
 
         curl -L "$FFMPEG_URL" -o "$OUTPUT_DIR/ffmpeg.zip"
         unzip -o "$OUTPUT_DIR/ffmpeg.zip" -d "$OUTPUT_DIR"

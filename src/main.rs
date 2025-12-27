@@ -345,7 +345,7 @@ fn main() -> Result<()> {
     if let Some(ref format) = cli.format {
         println!("{} {}", "Output format:".white(), format);
     }
-    if output_dir != PathBuf::from(".") {
+    if output_dir.as_os_str() != "." {
         println!("{} {}", "Output directory:".white(), output_dir.display());
     }
     println!();
