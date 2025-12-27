@@ -27,89 +27,26 @@ OBS-Cutter uses FFmpeg's crop filter to extract the left and right halves of you
 
 Both output videos maintain the original 1920x1080 resolution and preserve all audio tracks. The tool uses efficient encoding settings based on your quality preference to ensure optimal file sizes without compromising visual quality.
 
-## Prerequisites
-
-**FFmpeg** is required for video processing. Install it using your package manager:
-
-**macOS (Homebrew):**
-```bash
-brew install ffmpeg
-```
-
-**Ubuntu/Debian:**
-```bash
-sudo apt-get install ffmpeg
-```
-
-**Windows (Chocolatey):**
-```bash
-choco install ffmpeg
-```
-
-Or download from the [FFmpeg official site](https://ffmpeg.org/download.html).
-
 ## Installation
 
-### Option 1: Download Pre-built Binary (Recommended)
+Download the latest release from the [releases page](https://github.com/stefanodecillis/obs-cutter/releases/latest).
 
-Download the latest release for your platform from the [releases page](https://github.com/stefanodecillis/obs-cutter/releases):
+| Platform | GUI (Recommended) | CLI |
+|----------|-------------------|-----|
+| macOS (Apple Silicon) | `OBS-Cutter-macos-arm64.dmg` | `obs-cutter-cli-macos-aarch64` |
+| macOS (Intel) | `OBS-Cutter-macos-x64.dmg` | `obs-cutter-cli-macos-x86_64` |
+| Linux (x64) | `obs-cutter-gui-linux-x64.tar.gz` | `obs-cutter-cli-linux-x86_64` |
+| Linux (ARM64) | - | `obs-cutter-cli-linux-aarch64` |
+| Windows (x64) | `obs-cutter-gui-windows-x64.zip` | `obs-cutter-cli-windows-x86_64.exe` |
 
-**macOS:**
-```bash
-# For Apple Silicon (M1/M2/M3)
-curl -L https://github.com/stefanodecillis/obs-cutter/releases/latest/download/obs-cutter-macos-aarch64 -o obs-cutter
-chmod +x obs-cutter
-sudo mv obs-cutter /usr/local/bin/
+- **GUI version**: Includes bundled FFmpeg - no additional dependencies needed
+- **CLI version**: Requires FFmpeg to be installed separately
 
-# For Intel Macs
-curl -L https://github.com/stefanodecillis/obs-cutter/releases/latest/download/obs-cutter-macos-x86_64 -o obs-cutter
-chmod +x obs-cutter
-sudo mv obs-cutter /usr/local/bin/
-```
-
-**Linux:**
-```bash
-# For x86_64
-curl -L https://github.com/stefanodecillis/obs-cutter/releases/latest/download/obs-cutter-linux-x86_64 -o obs-cutter
-chmod +x obs-cutter
-sudo mv obs-cutter /usr/local/bin/
-
-# For ARM64
-curl -L https://github.com/stefanodecillis/obs-cutter/releases/latest/download/obs-cutter-linux-aarch64 -o obs-cutter
-chmod +x obs-cutter
-sudo mv obs-cutter /usr/local/bin/
-```
-
-**Windows:**
-Download `obs-cutter-windows-x86_64.exe` from the [releases page](https://github.com/stefanodecillis/obs-cutter/releases/latest) and add it to your PATH.
-
-### Option 2: Install from Source
-
-If you have Rust installed, you can build and install from source:
-
-```bash
-# Install Rust if needed
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
-# Clone the repository
-git clone https://github.com/stefanodecillis/obs-cutter.git
-cd obs-cutter
-
-# Install
-cargo install --path .
-```
-
-This will install the binary to `~/.cargo/bin/obs-cutter`, which should be in your PATH.
-
-### Option 3: Build Release Binary
-
-To build a standalone binary without installing:
-
-```bash
-cargo build --release
-```
-
-The binary will be available at `target/release/obs-cutter`.
+**See [INSTALL.md](INSTALL.md) for detailed installation instructions**, including:
+- Step-by-step setup for each platform
+- How to handle macOS security warnings
+- Building from source
+- Troubleshooting common issues
 
 ## Usage
 

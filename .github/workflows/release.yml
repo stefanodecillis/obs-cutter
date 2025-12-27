@@ -191,7 +191,51 @@ jobs:
           </plist>
           EOF
 
-          # Create DMG
+          # Remove extended attributes that cause "damaged" errors
+          xattr -cr dist/OBS-Cutter.app
+
+          # Ad-hoc sign the app (allows running after user approval)
+          codesign --force --deep --sign - dist/OBS-Cutter.app
+
+          # Create symlink to Applications for drag-and-drop install
+          ln -s /Applications dist/Applications
+
+          # Create README with installation instructions
+          cat > dist/README.txt << 'README_EOF'
+          ╔═══════════════════════════════════════════════════════════════╗
+          ║                    OBS-CUTTER INSTALLATION                    ║
+          ╚═══════════════════════════════════════════════════════════════╝
+
+          INSTALL:
+          1. Drag "OBS-Cutter.app" to the "Applications" folder
+          2. Eject this disk image
+
+          FIRST LAUNCH (Important!):
+          Since OBS-Cutter is not notarized with Apple, macOS will block
+          it on first launch. To open the app:
+
+          Option A - Right-click to Open:
+            1. Open Finder → Applications
+            2. RIGHT-CLICK on OBS-Cutter.app
+            3. Select "Open" from the menu
+            4. Click "Open" in the dialog
+
+          Option B - System Settings:
+            1. Try to open the app (it will be blocked)
+            2. Go to System Settings → Privacy & Security
+            3. Click "Open Anyway" next to the OBS-Cutter message
+
+          Option C - Terminal:
+            Run: xattr -cr /Applications/OBS-Cutter.app
+
+          After the first successful launch, the app opens normally.
+
+          ─────────────────────────────────────────────────────────────────
+          For more help, visit:
+          https://github.com/stefanodecillis/obs-cutter/blob/main/INSTALL.md
+          README_EOF
+
+          # Create DMG with app, Applications symlink, and README
           hdiutil create -volname "OBS-Cutter" -srcfolder dist -ov -format UDZO "OBS-Cutter-${{ matrix.platform }}.dmg"
 
       - name: Create distribution package (Linux)
