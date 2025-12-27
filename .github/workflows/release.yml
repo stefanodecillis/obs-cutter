@@ -9,9 +9,15 @@ on:
 permissions:
   contents: write
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
-  build:
-    name: Build ${{ matrix.target }}
+  # ============================================
+  # CLI Builds (lightweight, no FFmpeg bundled)
+  # ============================================
+  build-cli:
+    name: CLI ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -20,23 +26,23 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             artifact_name: obs-cutter
-            asset_name: obs-cutter-linux-x86_64
+            asset_name: obs-cutter-cli-linux-x86_64
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             artifact_name: obs-cutter
-            asset_name: obs-cutter-linux-aarch64
+            asset_name: obs-cutter-cli-linux-aarch64
           - os: macos-latest
             target: x86_64-apple-darwin
             artifact_name: obs-cutter
-            asset_name: obs-cutter-macos-x86_64
+            asset_name: obs-cutter-cli-macos-x86_64
           - os: macos-latest
             target: aarch64-apple-darwin
             artifact_name: obs-cutter
-            asset_name: obs-cutter-macos-aarch64
+            asset_name: obs-cutter-cli-macos-aarch64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact_name: obs-cutter.exe
-            asset_name: obs-cutter-windows-x86_64.exe
+            asset_name: obs-cutter-cli-windows-x86_64.exe
 
     steps:
       - name: Checkout code
@@ -49,36 +55,26 @@ jobs:
 
       - name: Install cross-compilation tools (Linux ARM64)
         if: matrix.target == 'aarch64-unknown-linux-gnu'
-        run: |
-          cargo install cross --git https://github.com/cross-rs/cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
 
-      - name: Cache cargo registry
+      - name: Cache cargo
         uses: actions/cache@v4
         with:
-          path: ~/.cargo/registry
-          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-cli-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Cache cargo index
-        uses: actions/cache@v4
-        with:
-          path: ~/.cargo/git
-          key: ${{ runner.os }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Cache cargo build
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: ${{ runner.os }}-cargo-build-target-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Build (Linux ARM64 with cross)
+      - name: Build CLI (Linux ARM64 with cross)
         if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: cross build --release --target ${{ matrix.target }}
 
-      - name: Build (other targets)
+      - name: Build CLI (other targets)
         if: matrix.target != 'aarch64-unknown-linux-gnu'
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Strip binary (Unix, except ARM64 Linux)
+      - name: Strip binary (Unix)
         if: runner.os != 'Windows' && matrix.target != 'aarch64-unknown-linux-gnu'
         run: strip target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
         continue-on-error: true
@@ -89,9 +85,166 @@ jobs:
           name: ${{ matrix.asset_name }}
           path: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
 
+  # ============================================
+  # GUI Builds (with FFmpeg bundled)
+  # ============================================
+  build-gui:
+    name: GUI ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: macos-arm64
+            target: aarch64-apple-darwin
+            ffmpeg_platform: macos-arm64
+          - os: macos-latest
+            platform: macos-x64
+            target: x86_64-apple-darwin
+            ffmpeg_platform: macos-x64
+          - os: ubuntu-latest
+            platform: linux-x64
+            target: x86_64-unknown-linux-gnu
+            ffmpeg_platform: linux-x64
+          - os: windows-latest
+            platform: windows-x64
+            target: x86_64-pc-windows-msvc
+            ffmpeg_platform: windows-x64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-gui-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Download FFmpeg
+        shell: bash
+        run: |
+          chmod +x scripts/download-ffmpeg.sh
+          ./scripts/download-ffmpeg.sh ${{ matrix.ffmpeg_platform }} ./ffmpeg-bin
+
+      - name: Build GUI
+        run: cargo build --release --features gui --target ${{ matrix.target }}
+
+      - name: Create distribution package (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p dist/OBS-Cutter.app/Contents/MacOS
+          mkdir -p dist/OBS-Cutter.app/Contents/Resources
+
+          # Copy binary
+          cp target/${{ matrix.target }}/release/obs-cutter-gui dist/OBS-Cutter.app/Contents/MacOS/
+
+          # Copy FFmpeg binaries
+          cp ffmpeg-bin/ffmpeg dist/OBS-Cutter.app/Contents/Resources/
+          cp ffmpeg-bin/ffprobe dist/OBS-Cutter.app/Contents/Resources/
+
+          # Create Info.plist
+          cat > dist/OBS-Cutter.app/Contents/Info.plist << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>obs-cutter-gui</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.stefanodecillis.obs-cutter</string>
+              <key>CFBundleName</key>
+              <string>OBS-Cutter</string>
+              <key>CFBundleDisplayName</key>
+              <string>OBS-Cutter</string>
+              <key>CFBundleVersion</key>
+              <string>2.0.0</string>
+              <key>CFBundleShortVersionString</key>
+              <string>2.0.0</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>LSMinimumSystemVersion</key>
+              <string>10.15</string>
+              <key>NSHighResolutionCapable</key>
+              <true/>
+          </dict>
+          </plist>
+          EOF
+
+          # Create DMG
+          hdiutil create -volname "OBS-Cutter" -srcfolder dist -ov -format UDZO "OBS-Cutter-${{ matrix.platform }}.dmg"
+
+      - name: Create distribution package (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p dist/obs-cutter
+          cp target/${{ matrix.target }}/release/obs-cutter-gui dist/obs-cutter/
+          cp ffmpeg-bin/ffmpeg dist/obs-cutter/
+          cp ffmpeg-bin/ffprobe dist/obs-cutter/
+          chmod +x dist/obs-cutter/*
+
+          # Create tarball
+          cd dist && tar -czvf ../obs-cutter-gui-${{ matrix.platform }}.tar.gz obs-cutter
+
+      - name: Create distribution package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist/obs-cutter
+          Copy-Item target/${{ matrix.target }}/release/obs-cutter-gui.exe dist/obs-cutter/
+          Copy-Item ffmpeg-bin/ffmpeg.exe dist/obs-cutter/
+          Copy-Item ffmpeg-bin/ffprobe.exe dist/obs-cutter/
+
+          # Create ZIP
+          Compress-Archive -Path dist/obs-cutter/* -DestinationPath obs-cutter-gui-${{ matrix.platform }}.zip
+
+      - name: Upload macOS DMG
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: obs-cutter-gui-${{ matrix.platform }}-dmg
+          path: OBS-Cutter-${{ matrix.platform }}.dmg
+
+      - name: Upload Linux tarball
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: obs-cutter-gui-${{ matrix.platform }}-tar
+          path: obs-cutter-gui-${{ matrix.platform }}.tar.gz
+
+      - name: Upload Windows ZIP
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: obs-cutter-gui-${{ matrix.platform }}-zip
+          path: obs-cutter-gui-${{ matrix.platform }}.zip
+
+  # ============================================
+  # Create GitHub Release
+  # ============================================
   release:
     name: Create Release
-    needs: build
+    needs: [build-cli, build-gui]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -108,15 +261,31 @@ jobs:
       - name: Prepare release assets
         run: |
           mkdir -p release-assets
-          for dir in artifacts/*/; do
-            artifact_name=$(basename "$dir")
-            if [[ -f "${dir}obs-cutter" ]]; then
-              cp "${dir}obs-cutter" "release-assets/${artifact_name}"
-              chmod +x "release-assets/${artifact_name}"
-            elif [[ -f "${dir}obs-cutter.exe" ]]; then
-              cp "${dir}obs-cutter.exe" "release-assets/${artifact_name}"
+
+          # CLI binaries
+          for dir in artifacts/obs-cutter-cli-*/; do
+            if [ -d "$dir" ]; then
+              artifact_name=$(basename "$dir")
+              if [[ -f "${dir}obs-cutter" ]]; then
+                cp "${dir}obs-cutter" "release-assets/${artifact_name}"
+                chmod +x "release-assets/${artifact_name}"
+              elif [[ -f "${dir}obs-cutter.exe" ]]; then
+                cp "${dir}obs-cutter.exe" "release-assets/${artifact_name}"
+              fi
             fi
           done
+
+          # GUI packages
+          for dir in artifacts/obs-cutter-gui-*/; do
+            if [ -d "$dir" ]; then
+              for file in "$dir"*; do
+                if [ -f "$file" ]; then
+                  cp "$file" release-assets/
+                fi
+              done
+            fi
+          done
+
           ls -lh release-assets/
 
       - name: Create Release
@@ -126,5 +295,30 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
+          body: |
+            ## OBS-Cutter v2.0.0
+
+            Split 32:9 OBS recordings into two separate 16:9 videos.
+
+            ### Downloads
+
+            **GUI (with bundled FFmpeg - recommended for most users):**
+            - macOS ARM64 (Apple Silicon): `OBS-Cutter-macos-arm64.dmg`
+            - macOS x64 (Intel): `OBS-Cutter-macos-x64.dmg`
+            - Linux x64: `obs-cutter-gui-linux-x64.tar.gz`
+            - Windows x64: `obs-cutter-gui-windows-x64.zip`
+
+            **CLI (requires FFmpeg installed separately):**
+            - Linux x64: `obs-cutter-cli-linux-x86_64`
+            - Linux ARM64: `obs-cutter-cli-linux-aarch64`
+            - macOS ARM64: `obs-cutter-cli-macos-aarch64`
+            - macOS x64: `obs-cutter-cli-macos-x86_64`
+            - Windows x64: `obs-cutter-cli-windows-x86_64.exe`
+
+            ### New in v2.0.0
+            - Cross-platform GUI application
+            - Multiple video selection and batch processing
+            - Bundled FFmpeg (no separate installation needed for GUI)
+            - Hardware acceleration support (VideoToolbox, NVENC, Quick Sync, AMF)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

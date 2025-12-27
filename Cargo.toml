@@ -1,9 +1,9 @@
 [package]
 name = "obs-cutter"
-version = "1.0.2"
+version = "2.0.0"
 edition = "2021"
 authors = ["Stefano De Cillis <stefanodecillis@users.noreply.github.com>"]
-description = "CLI tool to split 32:9 OBS recordings into two separate 16:9 videos"
+description = "Split 32:9 OBS recordings into two separate 16:9 videos - CLI and GUI"
 license = "MIT"
 repository = "https://github.com/stefanodecillis/obs-cutter"
 homepage = "https://github.com/stefanodecillis/obs-cutter"
@@ -11,20 +11,50 @@ keywords = ["video", "ffmpeg", "obs", "cli", "split"]
 categories = ["command-line-utilities", "multimedia::video"]
 readme = "README.md"
 
+[lib]
+name = "obs_cutter"
+path = "src/lib.rs"
+
 [[bin]]
 name = "obs-cutter"
 path = "src/main.rs"
 
+[[bin]]
+name = "obs-cutter-gui"
+path = "src/gui_main.rs"
+required-features = ["gui"]
+
+[features]
+default = []
+gui = ["dep:iced", "dep:rfd", "dep:tokio", "dep:open", "dep:async-stream"]
+
 [dependencies]
+# Core dependencies (always included)
+anyhow = "1.0"
+thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+regex = "1.10"
+
+# CLI dependencies
 clap = { version = "4.5", features = ["derive"] }
 colored = "2.1"
 indicatif = "0.17"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-anyhow = "1.0"
+
+# GUI dependencies (feature-gated)
+iced = { version = "0.13", optional = true, features = ["tokio"] }
+rfd = { version = "0.15", optional = true }
+tokio = { version = "1.0", features = ["sync", "rt-multi-thread", "time"], optional = true }
+open = { version = "5.0", optional = true }
+async-stream = { version = "0.3", optional = true }
 
 [profile.release]
 opt-level = 3
 lto = true
 codegen-units = 1
 strip = true
+
+[profile.release-gui]
+inherits = "release"
+# Keep some debug info for better crash reports in GUI
+strip = "debuginfo"
