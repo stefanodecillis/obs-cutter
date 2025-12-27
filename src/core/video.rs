@@ -369,7 +369,7 @@ pub fn process_video(
         left_size,
         right_size,
         duration: start_time.elapsed(),
-        encoder_used: encoder.clone(),
+        encoder_used: *encoder,
     })
 }
 

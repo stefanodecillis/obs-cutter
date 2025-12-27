@@ -4,7 +4,7 @@ use crate::core::ffmpeg;
 use std::process::{Command, Stdio};
 
 /// Available hardware encoders for H.264 video encoding.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum HardwareEncoder {
     /// VideoToolbox - macOS hardware encoder (Apple Silicon & Intel).
     VideoToolbox,
@@ -19,6 +19,7 @@ pub enum HardwareEncoder {
     Amf,
 
     /// Software encoding fallback (libx264).
+    #[default]
     None,
 }
 
@@ -48,12 +49,6 @@ impl HardwareEncoder {
     /// Returns true if this is a hardware encoder.
     pub fn is_hardware(&self) -> bool {
         !matches!(self, HardwareEncoder::None)
-    }
-}
-
-impl Default for HardwareEncoder {
-    fn default() -> Self {
-        HardwareEncoder::None
     }
 }
 

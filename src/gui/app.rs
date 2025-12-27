@@ -523,7 +523,7 @@ impl App {
     }
 
     /// Render the current view.
-    pub fn view(&self) -> Element<Message> {
+    pub fn view(&self) -> Element<'_, Message> {
         let content = match self.screen {
             Screen::FileSelection => self.view_file_selection(),
             Screen::Settings => self.view_settings(),
@@ -543,7 +543,7 @@ impl App {
     }
 
     /// File selection screen view.
-    fn view_file_selection(&self) -> Element<Message> {
+    fn view_file_selection(&self) -> Element<'_, Message> {
         // Header row
         let title = text("OBS-Cutter").size(32).color(colors::TEXT_PRIMARY);
 
@@ -614,7 +614,7 @@ impl App {
             row![file_count, horizontal_space(), clear_btn].align_y(Alignment::Center);
 
         // Files list
-        let files_content: Element<Message> = if self.videos.is_empty() {
+        let files_content: Element<'_, Message> = if self.videos.is_empty() {
             container(
                 text("No videos selected - add some videos to get started")
                     .size(14)
@@ -704,7 +704,7 @@ impl App {
     }
 
     /// Settings screen view.
-    fn view_settings(&self) -> Element<Message> {
+    fn view_settings(&self) -> Element<'_, Message> {
         // Header
         let title = text("Settings").size(32).color(colors::TEXT_PRIMARY);
         let back_btn = button(text("Back").size(14).color(colors::TEXT_PRIMARY))
@@ -848,7 +848,7 @@ impl App {
     }
 
     /// Processing screen view.
-    fn view_processing(&self) -> Element<Message> {
+    fn view_processing(&self) -> Element<'_, Message> {
         let title = text("Processing Videos")
             .size(32)
             .color(colors::TEXT_PRIMARY);
@@ -925,7 +925,7 @@ impl App {
         .align_y(Alignment::Center);
 
         // Completed videos list
-        let completed_content: Element<Message> = if !self.results.is_empty() {
+        let completed_content: Element<'_, Message> = if !self.results.is_empty() {
             let mut completed_list = column![].spacing(8);
             for result in &self.results {
                 let name = result
@@ -999,7 +999,7 @@ impl App {
     }
 
     /// Results screen view.
-    fn view_results(&self) -> Element<Message> {
+    fn view_results(&self) -> Element<'_, Message> {
         let success_count = self.results.len();
         let error_count = self.errors.len();
 
@@ -1019,7 +1019,7 @@ impl App {
         .color(colors::TEXT_SECONDARY);
 
         // Results list
-        let results_content: Element<Message> = {
+        let results_content: Element<'_, Message> = {
             let mut col = column![].spacing(12);
 
             for result in &self.results {
