@@ -127,17 +127,23 @@ case "$PLATFORM" in
         FFMPEG_URL="https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
 
         curl -L "$FFMPEG_URL" -o "$OUTPUT_DIR/ffmpeg.zip"
-        unzip -o "$OUTPUT_DIR/ffmpeg.zip" -d "$OUTPUT_DIR"
 
-        # Find and move the binaries
-        FFMPEG_DIR=$(find "$OUTPUT_DIR" -type d -name "ffmpeg-*" | head -1)
-        if [ -n "$FFMPEG_DIR" ]; then
+        # Extract using PowerShell (more reliable on Windows)
+        if command -v pwsh &> /dev/null || command -v powershell &> /dev/null; then
+            powershell -Command "Expand-Archive -Path '$OUTPUT_DIR/ffmpeg.zip' -DestinationPath '$OUTPUT_DIR' -Force"
+        else
+            unzip -o "$OUTPUT_DIR/ffmpeg.zip" -d "$OUTPUT_DIR"
+        fi
+
+        # Move binaries from known directory structure
+        FFMPEG_DIR="$OUTPUT_DIR/ffmpeg-master-latest-win64-gpl"
+        if [ -d "$FFMPEG_DIR" ]; then
             mv "$FFMPEG_DIR/bin/ffmpeg.exe" "$OUTPUT_DIR/"
             mv "$FFMPEG_DIR/bin/ffprobe.exe" "$OUTPUT_DIR/"
             rm -rf "$FFMPEG_DIR"
         fi
 
-        rm "$OUTPUT_DIR/ffmpeg.zip"
+        rm -f "$OUTPUT_DIR/ffmpeg.zip"
         ;;
 
     *)
